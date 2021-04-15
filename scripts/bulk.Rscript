@@ -1,0 +1,29 @@
+library(ComplexHeatmap)
+library(ggpubr)
+library(dplyr)
+library(ggplot2)
+library(circlize)
+
+
+exp_fpkm = read.csv("data/bulk.fpkm.csv", header=1, row.names = 1, stringsAsFactors=FALSE)
+meta = read.csv("bulk/bulk.meta.csv", header=1, row.names = 1, stringsAsFactors=FALSE)
+
+rp_genes = c('RPL21', 'RPS12', 'RPS14', 'RPLP2', 'RPL30', 'RPS6', 'RPL13A', 'RPS15A',
+       'RPS4X', 'RPS10', 'RPL19', 'RPS28', 'RPS19', 'RPL39', 'RPS3', 'RPL41',
+       'RPS11', 'RPS3A', 'RPL4', 'RPL7', 'RPL31', 'RPL34', 'RPL9', 'RPSA',
+       'RPS13', 'RPS9', 'RPL12', 'RPL7A', 'RPS2', 'RPL5', 'RPL35', 'RPS5',
+       'RPL18A', 'RPS7', 'RPL17', 'RPL32', 'RPL6', 'RPL24', 'RPS20', 'RPLP1',
+       'RPL26', 'RPL3', 'RPLP0', 'RPL10A', 'RPL10', 'RPL23A', 'RPL38', 'RPS8',
+       'RPL28', 'RPL37A', 'RPL18', 'RPL14', 'RPL15', 'RPL35A', 'RPS18',
+       'RPS16', 'RPL29', 'RPL8', 'RPL11', 'RPS17', 'RPS15', 'RPS24', 'RPS25',
+       'RPS27A', 'RPS27', 'RPS29', 'RPL13', 'RPL23', 'RPL36',
+       'RPL27', 'RPS23', 'RPS21', 'RPS26', 'RPL37', 'RPL22',
+       'RPL36AL', 'RPL7L1', 'RPL27A', 'RPS27L', 'RPL36A',
+       'RPL22L1',  'RPL26L1', "RPL3L", "RPL10L")
+
+rp_fpkm = exp_fpkm[rp_genes,]
+rp_fpkm = rp_fpkm[rowMeans(rp_fpkm) > 1,]
+data = as.data.frame(t(rp_fpkm))
+data = do.call(cbind,lapply(colnames(data), function(x) {return(as.data.frame(scale(log2(data[x]+1))))}))
+
+saveRDS(data, "data/bulk_covid19.RDS")

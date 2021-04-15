@@ -1,0 +1,243 @@
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(RColorBrewer)
+library(scater)
+library(scran)
+library(irlba)
+library(Rtsne)
+library(BiocParallel)
+mcparam = MulticoreParam(workers=16)
+register(mcparam)
+library(Matrix)
+library(matrixStats)
+library(igraph)
+library(reshape2)
+library(knitr)
+library(cowplot)
+
+meta = read.csv("data/singlecell_covid19.meta.csv", row.names=1)
+
+# read counts
+pbmc.list = lapply(
+    rownames(meta),
+    function(x) {
+
+        filename = paste0("data/",x, ".counts.csv")
+        p = read.csv(filename, row.names=1)
+        pbmc =  CreateSeuratObject(counts=p, project=x)
+        pbmc = PercentageFeatureSet(pbmc, pattern="^MT-", col.name="percent.mt")
+        pbmc = PercentageFeatureSet(pbmc, pattern="^RP[SL]", col.name="percent.rp")
+
+        pbmc[["sample"]] = x
+        pbmc[["group"]] = meta[x,]$group
+        return(pbmc)
+    }
+)
+
+pbmc = merge(pbmc.list[[1]], y=pbmc.list[2:length(rownames(meta))], add.cell.ids=rownames(meta))
+
+# find doublet
+getHVGs = function(sce, min.mean = 1e-3, gene_df = genes){
+  require(biomaRt)
+  dec <- modelGeneVar(sce)
+  #trend = scran::trendVar(sce, use.spikes = FALSE, loess.args = list(span = 0.05))
+  #decomp = scran::decomposeVar(sce, fit = trend)
+  decomp = dec[dec$mean > min.mean,]
+
+  #exclude sex genes
+
+  decomp$FDR = p.adjust(decomp$p.value, method = "fdr")
+  return(rownames(decomp)[decomp$p.value < 0.05])
+}
+
+find_doublet <- function(object) {
+
+    sce <- SingleCellExperiment(assays = list("counts" = GetAssayData(object,assay = "RNA", slot = "counts")))
+    meta <- object@meta.data
+    meta$sample = meta$orig.ident
+    sample = meta$sample[1]
+    sce <- scran::computeSumFactors(sce)
+    sce <- scater::logNormCounts(sce)
+    hvg <- getHVGs(sce)
+
+    scores_hvgs = doubletCells(sce ,subset.row = rownames(sce) %in% hvg)
+    scores = scores_hvgs
+    log_score = log2(scores + 1)
+
+    sampsize = melt(table(meta$sample))
+    order = order(sampsize$value, decreasing = FALSE)
+
+    pca = prcomp_irlba(t(logcounts(sce[hvg,])), n = 50)
+    tsne = Rtsne(pca$x, pca = FALSE)
+    maxscore = max(log_score)
+    ord = order(log_score)
+
+    graph = buildSNNGraph(sce,k=10)
+    clusters = cluster_louvain(graph)
+    clusters = as.numeric(membership(clusters))
+    sub_clusts = lapply(unique(clusters), function(y){
+        sub_sub_sce = scater::logNormCounts(sce[,clusters == y])
+        sub_sub_meta = meta[clusters == y,]
+        graph = buildSNNGraph(sub_sub_sce, k=10, d = min(c(ncol(sub_sub_sce)-1, 50)))
+        clusters = cluster_louvain(graph)
+        vec = as.numeric(membership(clusters))
+        vec = paste0(y, ".", vec)
+        names(vec) = rownames(sub_sub_meta)
+        return(vec)
+      })
+    clusters = do.call(c, sub_clusts)
+    clusters = clusters[match(rownames(meta), names(clusters))]
+
+    meta$doub.density = scores
+
+    col2 = regmatches(clusters, regexpr("[0-9]+", clusters))
+
+    pdf = aggregate(meta$doub.density,  list(meta$sample, clusters), median)
+    names(pdf) = c("sample", "cluster", "median.score")
+
+
+    mad_upper = function(x){
+      x = x-median(x)
+      return(mad(x[x>0], center = 0))
+    }
+
+    pdf$p.value = pnorm(pdf$median.score, mean = median(pdf$median.score), sd = mad_upper(pdf$median.score), lower.tail = FALSE)
+
+    pdf$fdr = p.adjust(pdf$p.value, method = "BH")
+    pdf$n.cells = sapply(1:nrow(pdf), function(row){
+      sum(clusters == pdf$cluster[row])
+    })
+
+    pdf$frac.cells = sapply(1:nrow(pdf), function(row){
+      pdf$n.cells[row]/sum(pdf$n.cells)
+    })
+
+    doub.call = paste(meta$sample, clusters) %in% paste(pdf$sample, pdf$cluster)[pdf$fdr < 0.1]
+    fd = sapply(unique(meta$sample), function(x){
+      sum(doub.call[meta$sample == x])/sum(meta$sample == x)
+    })
+    nc = sapply(unique(meta$sample), function(x){
+      sum(meta$sample == x)
+    })
+
+    cell_calls = doub.call
+    state = rep("Singlet", nrow(meta))
+    state[cell_calls] = "Doublet"
+
+    ord = sample(length(state), length(state))
+    print(length(scores[cell_calls]))
+    object@meta.data["doubletscore"] = scores
+    object@meta.data["state"] = state
+    return (object)
+}
+
+singlet_cells = lapply(rownames(meta), function(x) {
+    sub = subset(pbmc, idents=c(x))
+    sub <- subset(sub, subset=percent.mt<=15 & nCount_RNA>500 & nCount_RNA<30000 & nFeature_RNA>200)
+    l = find_doublet(sub)
+    sub = subset(l, subset=state=="Singlet")
+    return (rownames(sub@meta.data))
+})
+
+# get singlet cells
+cells = do.call(c, singlet_cells)
+pbmc_singlet = subset(pbmc, cells=cells)
+
+singlet_cells = lapply(rownames(meta), function(x) {
+    sub = subset(pbmc, idents=c(x))
+    sub <- subset(sub, subset=percent.mt<=15 & nCount_RNA>500 & nCount_RNA<30000 & nFeature_RNA>200)
+    l = find_doublet(sub)
+    sub = subset(l, subset=state=="Singlet")
+    return (rownames(sub@meta.data))
+})
+
+cells = do.call(c, singlet_cells)
+pbmc_singlet = subset(pbmc, cells=cells)
+
+# plot cell number per sample
+plot_cell_num <- function(object) {
+    cell = aggregate(object@meta.data$orig.ident, by=list(object@meta.data$orig.ident, object@meta.data$group), FUN = length)
+    names(cell) = c("sample", "group", "count")
+    p = ggplot(cell, aes(x=sample, y=count)) +
+      geom_col(aes(fill=group)) + geom_text(aes(label=count), vjust=-0.1) +
+    ylim(c(0,15000))
+    return(p)
+}
+plot_cell_num(pbmc_singlet)
+
+# create new seurat object
+pbmc = CreateSeuratObject(counts = GetAssayData(pbmc_singlet, slot="counts"), project="covid19", min.cells=10)
+pbmc@meta.data = pbmc_singlet@meta.data
+
+mt_gene = c('MT-ND1','MT-ND2', 'MT-CO1', 'MT-CO2', 'MT-ATP8', 'MT-ATP6', 'MT-CO3', 'MT-ND3',
+    'MT-ND4L', 'MT-ND4', 'MT-ND5', 'MT-ND6', 'MT-CYB')
+rp_gene = c(
+    'RPL22', 'RPL11', 'RPS8', 'RPL5', 'RPS27', 'RPS7', 'RPS27A', 'RPL31', 'RPL37A', 'RPL32',
+    'RPL15', 'RPSA', 'RPL14', 'RPL29', 'RPL24', 'RPL35A', 'RPL9', 'RPL34', 'RPS3A', 'RPL37',
+    'RPS23', 'RPS14', 'RPS18', 'RPS10', 'RPL10A', 'RPS12', 'RPS4X', 'RPL36A', 'RPL39', 'RPL10',
+    'RPS20', 'RPL7', 'RPL30', 'RPL8', 'RPS6', 'RPL35', 'RPL12', 'RPL7A', 'RPLP2', 'RPL27A',
+    'RPS13', 'RPS3', 'RPS25', 'RPS24', 'RPS26', 'RPL41', 'RPL6', 'RPLP0', 'RPL21', 'RPL10L',
+    'RPS29', 'RPL4', 'RPLP1', 'RPS17', 'RPS2', 'RPS15A', 'RPL13', 'RPL26', 'RPL23A', 'RPL23',
+    'RPL19', 'RPL27', 'RPL38', 'RPL17-C18orf32', 'RPL17', 'RPS21', 'RPS15', 'RPL36', 'RPS28', 'RPL18A',
+    'RPS16', 'RPS19', 'RPL18', 'RPL13A', 'RPS11', 'RPS9', 'RPL28', 'RPS5', 'RPS4Y1', 'RPS4Y2', 'RPL3')
+
+# normalize and scale data
+library(dplyr)
+pbmc = Seurat::NormalizeData(pbmc, verbose = FALSE) %>%
+    FindVariableFeatures(selection.method = "vst", nfeatures = 3000) %>%
+    ScaleData(verbose = FALSE,vars.to.regress=c("nCount_RNA", "percent.mt", "percent.rp"))
+
+# integrate samples by harmony
+var.genes = VariableFeatures(pbmc)
+var.genes = setdiff(var.genes, c(mt_gene, rp_gene))
+pbmc = RunPCA(pbmc, features=var.genes, npcs = 30, verbose = FALSE)
+pbmc <- pbmc %>%
+    RunHarmony(c("sample"), plot_convergence = TRUE)
+
+# UMAP and clustering
+pbmc <- pbmc %>%
+    RunUMAP(reduction = "harmony", dims = 1:30) %>%
+    FindNeighbors(reduction = "harmony", dims = 1:30) %>%
+    FindClusters(resolution = 1) %>%
+    identity()
+
+# find markers and plot canonical markers
+markers <- FindAllMarkers(pbmc, min.pct=0.25)
+write.csv(markers %>% group_by(cluster) %>% top_n(n=50, wt=avg_logFC), "data/markers.csv")
+
+DotPlot(pbmc, features=c("CD3D", "CD3E", "CD4", "CCR7", "TCF7", "CCR6", "FOXP3", "CD8A", "CD8B",
+    "GZMK", "GZMH", "TRGV9", "SLC4A10", "MKI67", "KLRF1", "CD79A", "IGHD", "CD27", "MZB1", "LYZ",
+    "CD14", "FCGR3A", "CD1C", "CLEC4C", "PPBP", "CD34")
+       ) + NoLegend() +theme(text = element_text(size=20),
+    axis.text.x = element_text(angle=90, hjust=1))
+
+# annotate cluster
+cluster_name = data.frame(
+    cluster=c(0:31),
+    cell.type=c( "Memory CD4 T", "NKT",  "Cytotoxic T", "CD14 Mono", "Naive CD4 T", "NK", "CD14 Mono", "Naive B", "Naive CD8 T","CD16 Mono",
+                "Memory CD8 T",  "Memory B", "CD14 Mono", "Cytotoxic T", "gdT", "Treg", "MAIT", "Megakaryocyte", "mDC", "NK",
+                "Proliferative T", "unknown", "Naive CD4 T", "unknown", "unknown", "pDC", "RB", "Plasma B", "Naive CD4 T", "unknown",
+                "unknown", "HSC"
+               )
+)
+
+rename_cluster <- function(object, new_df, name) {
+    p = c()
+    for (i in object@meta.data$seurat_clusters) {
+        p = c(p, as.character(new_df[new_df$cluster==i,][name][1,]))
+    }
+    object@meta.data[name] = as.factor(p)
+    return(object)
+}
+
+pbmc = rename_cluster(pbmc, cluster_name, "cell.type")
+
+# remove unknown clusters and red blood cell
+pbmc = subset(pbmc, subset=cell.type != "unknown" & cell.type != "RB")
+cell_levels = c("Naive CD4 T", "Memory CD4 T", "Treg", "Naive CD8 T", "Memory CD8 T", "Cytotoxic T", "gdT", "MAIT", "Proliferative T", "NKT", "NK",
+              "Naive B", "Memory B", "Plasma B", "CD14 Mono", "CD16 Mono", "mDC", "pDC", "Megakaryocyte", "HSC"
+              )
+pbmc@meta.data$cell.type = factor(x=pbmc@meta.data$cell.type, levels=cell_levels)
+pbmc@meta.data$sample = factor(x=pbmc@meta.data$sample, levels=rownames(meta))
+saveRDS(pbmc, "data/singlecell_covid19.RDS")

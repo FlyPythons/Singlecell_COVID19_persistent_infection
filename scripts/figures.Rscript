@@ -1,0 +1,741 @@
+library(Seurat)
+library(ggplot2)
+
+pbmc = readRDS("data/singlecell_covid19.RDS")
+cluster_colors = c("#ca95c8", "#e065b2", "#f768a2", "#fdd59f", "#fdbd85", "#fc8e58", "#f06546", "#de3198", "#fec54e", "#cc1017", "#a6060e",
+                  "#78c779", "#3fac5c", "#1e8541", "#9fcbe2", "#6bafd7", "#4093c7", "#1c71b7", "#82067d", "#f7fcbb")
+names(cluster_colors) = c("Naive CD4 T", "Memory CD4 T", "Treg", "Naive CD8 T", "Memory CD8 T", "Cytotoxic T", "gdT", "MAIT", "Proliferative T", "NKT", "NK",
+              "Naive B", "Memory B", "Plasma B", "CD14 Mono", "CD16 Mono", "mDC", "pDC", "Megakaryocyte", "HSC")
+group_colors = c("blue", "orange", "red")
+names(group_colors) = c("HD", "SD", "LD")
+sample_colors = c("#02509d","#1c71b7","#4093c7",
+                 "salmon4","salmon3", "salmon2", "salmon1","salmon", "pink3","pink2","pink1","pink",
+                 "darkorange4","darkorange3","darkorange2","darkorange1","darkorange", "orange"
+                )
+no_bg <- theme_bw()+ theme(
+    line =element_line(colour = "black", size = 1),
+    text=element_text(color='black', size=8),
+    title=element_text(color='black', size=10),
+    panel.border = element_rect(colour ='black', size=1 ),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+# Fig2
+## Fig2a
+p = DimPlot(pbmc, group.by="cell.type", label=TRUE, cols=cluster_colors, pt.size = 0.001, label.size=-1) + NoLegend() + NoAxes() + ggtitle("")
+ggsave("figures/Fig2-a.jpg", p, width=5, height=5)
+
+## Fig2b
+plots = VlnPlot(pbmc, group.by = "cell.type", pt.size = -1,
+                features = c("CD3E", "CD4","FOXP3", "CD8A", "TRGV9","SLC4A10", "MKI67",  "KLRF1", "CD79A", "CD14", "FCGR3A", "CD1C", "CLEC4C", "PPBP", "CD34"),
+            ncol=3, combine=TRUE, cols=cluster_colors)
+p1 = plots[[1]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank()) + NoLegend()
+p2 = plots[[2]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p3 = plots[[3]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p4 = plots[[4]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank()) + NoLegend()
+p5 = plots[[5]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p6 = plots[[6]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p7 = plots[[7]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank()) + NoLegend()
+p8 = plots[[8]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p9 = plots[[9]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p10 = plots[[10]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank()) + NoLegend()
+p11 = plots[[11]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p12 = plots[[12]] + theme(axis.text.x=element_blank(), axis.title.x=element_blank(), axis.title.y=element_blank()) + NoLegend()
+p13 = plots[[13]] + theme(axis.title.x=element_blank(),axis.text.x=element_text(color='black', size=8)) + NoLegend()
+p14 = plots[[14]] + theme(axis.title.x=element_blank(), axis.text.x=element_text(color='black', size=8), axis.title.y=element_blank()) + NoLegend()
+p15 = plots[[15]] + theme(axis.title.x=element_blank(), axis.text.x=element_text(color='black', size=8), axis.title.y=element_blank()) + NoLegend()
+
+p = (p1 + p2 + p3)/(p4 + p5 + p6)/(p7 + p8 + p9)/(p10 + p11 + p12)/(p13 + p14 + p15)
+ggsave("figures/Fig2-b.pdf", width = 13.5, height = 6.8, p)
+
+## Fig2c
+plot_cluster_percent_bar <- function(object, color, cluster="seurat_clusters") {
+    batch_numbef <- aggregate(object@meta.data$seurat_clusters, by=list(object@meta.data[cluster][,1], object@meta.data$group, object@meta.data$orig.ident), FUN = length)
+    names(batch_numbef) = c("cell_type", "group", "sample",  "num")
+    batch2 <- aggregate(object@meta.data$sample, by=list(object@meta.data$sample), FUN = length)
+    percent = c()
+    for (i in rownames(batch_numbef)) {
+        k = batch_numbef[i,]
+
+        percent = c(percent, 100*k$num/batch2$x[batch2$Group.1 == as.character(k$sample)])
+    }
+
+    batch_numbef["percent"] = percent
+    batch_numbef$cell_type = factor(batch_numbef$cell_type, levels=levels(object@meta.data$cell.type))
+    batch_numbef$sample = factor(batch_numbef$sample, levels=levels(object@meta.data$sample))
+    plot = ggplot(data=batch_numbef, aes(x=sample, y=percent, fill=cell_type)) +geom_col( position="fill") + scale_fill_manual(values = color)
+
+    return(plot)
+}
+p = plot_cluster_percent_bar(pbmc , cluster_colors, "cell.type") + no_bg
+ggsave("figures/Fig2-c.pdf", p, width=8.5, height=5)
+
+## Fig2d
+plot_cluster_percent <- function(object, color, cluster="seurat_clusters") {
+    require(ggpubr)
+
+    batch_numbef <- aggregate(object@meta.data$seurat_clusters, by=list(object@meta.data[cluster][,1], object@meta.data$group, object@meta.data$orig.ident), FUN = length)
+    names(batch_numbef) = c("cluster", "group", "sample",  "num")
+    batch2 <- aggregate(object@meta.data$sample, by=list(object@meta.data$sample), FUN = length)
+    percent = c()
+    for (i in rownames(batch_numbef)) {
+        k = batch_numbef[i,]
+
+        percent = c(percent, k$num*100/batch2$x[batch2$Group.1 == as.character(k$sample)])
+    }
+
+    batch_numbef["percent"] = percent
+
+    batch_numbef$group = factor(x=batch_numbef$group, levels=c("HD", "SD", "LD"))
+    batch_numbef$sample = factor(x = batch_numbef$sample, levels = levels(object@meta.data$sample))
+    plot = ggplot(batch_numbef, aes (x = group, y = percent, group=group, ymin=0)) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_blank(aes(y = 0)) +
+        geom_jitter(aes(colour = sample),size = 3) +
+        scale_color_manual(values = color)  +
+        facet_wrap(~ cluster,scales = "free_y", ncol=10) +
+        stat_compare_means(comparisons = combn(levels(batch_numbef$group), 2, simplify =FALSE), method = "wilcox.test")
+    return(plot)
+}
+
+p = plot_cluster_percent(pbmc , sample_colors, "cell.type") + no_bg
+ggsave("figures/Fig2-d.pdf", width = 13.5, height = 5.2, p)
+
+
+# Fig3
+all_down_genes = c(
+    "RAC1", "TMA7", "TAF10", "PTOV1","PCBP1", "ARPC2", "KLF2", "GRK6", "SUN2", "SRM", "LYN",
+    "COTL1", "MAP2K2", "GNLY", "FMNL1", "CEBPD",  "RPL41", "RPS29", "RPS27", "RPL36A", "RPS10", "RPL38", "RPS21", "RPL39", "RPS28"
+    )
+
+cal_heatmap <- function(object, features, group.by, scale=TRUE) {
+
+    require(ComplexHeatmap)
+    Idents(object) <- group.by
+    features = unique(features)
+    exp = as.data.frame(AverageExpression(object, assay="RNA", slot = "data")$RNA)
+
+    data.scaled <- sapply(
+        features,
+        function(x) {
+            data.use <- t(exp[x,])
+            if (is.na(data.use[1])) {
+                return(data.use)
+
+                } else if (colSums(data.use) <= 0) {
+
+                return(data.use)
+            }
+            else {
+                if (scale) {
+                data.use <- scale(x = data.use)
+                data.use <- MinMax(data = data.use, min = -2.5, max = 2.5)
+                }
+                return(data.use)
+            }
+
+        }
+  )
+    rownames(data.scaled) = names(exp)
+    data.scaled = na.omit(t(data.scaled))
+   # p = Heatmap(data.scaled)
+    return(data.scaled)
+}
+
+## Fig3a
+go_enrich <- function(gene, ont="ALL") {
+
+    require(clusterProfiler)
+    require(org.Hs.eg.db)
+
+    genes = c()
+    feature = read.csv("data/symbol2ensembl.tsv", sep="\t", header=FALSE)
+    names(feature) = c("ENSG", "symbol", "type")
+    for (i in gene) {
+        b = as.character(feature[feature$symbol==i, "ENSG"])
+        if (length(b) != 1) {
+            print(i)
+        }
+        genes = c(genes, b)
+    }
+
+    genes <- bitr(genes, fromType = "ENSEMBL", toType = c("ENTREZID"), OrgDb = org.Hs.eg.db)
+    ego <- enrichGO(
+        gene = genes$ENTREZID, OrgDb = org.Hs.eg.db, keyType = "ENTREZID",ont = ont,
+        pAdjustMethod = "BH",pvalueCutoff = 1, qvalueCutoff = 1, readable = TRUE
+    )
+
+    return(ego)
+
+}
+
+analysis_culsters = c('Naive CD4 T','Memory CD4 T','Treg','Naive CD8 T','Memory CD8 T','Cytotoxic T','gdT','MAIT',
+                     'Proliferative T','NKT','NK','Naive B','Memory B','Plasma B','CD14 Mono','CD16 Mono','mDC',
+                     'pDC','Megakaryocyte')
+
+down_genes = read.csv("data/singlecell_covid19.down_gene.csv")
+pathways = data.frame()
+for (cell_type in analysis_culsters) {
+
+    down_gene = down_genes$gene[down_genes$cell == cell_type]
+    ego_down = go_enrich(down_gene, "BP")
+    pathway = ego_down[ego_down$p.adjust < 0.05,]
+    pathway["cell"] = cell_type
+    pathway = pathway[c("ID", "Description", "p.adjust","GeneRatio","cell")]
+    pathways = rbind(pathways, pathway)
+}
+pathways$p.adjust = as.numeric(as.character(pathways$p.adjust))
+wanted_pathway = pathways %>% group_by(cell) %>% top_n(n=10, wt=-p.adjust)
+pid = unique(wanted_pathway$ID)
+
+s = as.data.frame(do.call(rbind, strsplit(pathways$GeneRatio, "/")), stringsAsFactors = FALSE)
+s$V1 = as.numeric(s$V1)
+s$V2 = as.numeric(s$V2)
+pathways$GeneRatio = s$V1/s$V2
+long.down = pathways[pathways$ID %in% pid,]
+long.down$Description = factor(long.down$Description, levels= rev(unique(long.down$Description)))
+long.down$cell = factor(long.down$cell, levels= analysis_culsters)
+p = ggplot(data=long.down) +
+      geom_point(aes(x=cell, y=Description, size=GeneRatio, color=-log10(p.adjust))) + scale_color_continuous(limits=c(0,10), breaks=c(0, 10),na.value="blue", low="white", high="blue")+ theme_bw()+ theme(
+    line =element_line(colour = "black", size = 1),
+    text=element_text(color='black', size=8),
+    axis.text.x = element_text(size=8, angle = -45, hjust=0),
+    title=element_text(color='black', size=10),
+    panel.border = element_rect(colour ='black', size=1 ),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("figures/Fig3-a.pdf", width = 8, height = 8, p)
+
+## Fig3b
+pdf("figures/Fig3-b.pdf", width=8, height = 6.8)
+gene_df = cal_heatmap(pbmc,all_down_genes, group.by="sample")
+p = Heatmap(gene_df, use_raster = FALSE, cluster_columns = FALSE,cluster_rows = FALSE)
+print(p)
+dev.off()
+
+## Fig3c
+p = DotPlot(subset(pbmc, subset=cell.type!="HSC"), features = rev(all_down_genes), group.by="extra", cols ="RdBu", dot.scale = 2) + coord_flip() + no_bg
+ggsave("figures/Fig3-c.pdf", p,  width=8, height=7)
+
+## Fig3d
+bulk_data = readRDS("data/bulk_covid19.RDS")
+bulk_meta = read.csv("data/bulk.meta.csv", row.names=1)
+genes = colnames(bulk_data)
+bulk_data$last = bulk_meta[rownames(bulk_data), "last"]
+bulk_data$group = bulk_meta[rownames(bulk_data), "group"]
+heat_color = circlize::colorRamp2(c(-4, 0, 4), c("#3366cc", "white", "#993333"))
+col_anno = columnAnnotation( group=bulk_data$group, foo = anno_points(bulk_data["last"]), col = list(group = c("G1" = "pink", "G2" = "orange", "G3"= "red")))
+pdf("figures/Fig3-d.pdf", width=8, height = 6.8)
+p = Heatmap(t(bulk_data[genes]), bottom_annotation =col_anno, col =heat_color, show_column_names = FALSE, cluster_columns = FALSE, rect_gp = gpar(col = "white", lwd = 1))
+print(p)
+dev.off()
+
+## Fig3e
+plot.r2 <- function(data_plot, gene) {
+    data = data_plot[c(gene, "last","group")]
+    names(data) = c("x", "last","group")
+
+    p <- ggplot(data,aes(x=last,y=x)) + geom_point() + stat_smooth(method='lm',formula = y~x,colour='red')
+
+    model.lm<-lm(formula = last ~ x, data = data)
+
+    r2 = format(summary(model.lm)$r.squared, digits = 4)
+    pv = format(summary(model.lm)$coefficients[2,4], digits = 4)
+    a = paste0("r2=", r2,",pvalue=", pv)
+    print(a)
+    p1 = p + ylab(gene) + ggtitle(a) + theme_bw() +theme(
+    line =element_line(colour = "black", size = 1),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+    p2 = ggboxplot(data=data, x="group", y="x",color = "group", add = "jitter") + stat_compare_means(comparisons = list(
+    c("G1", "G2"), c("G1", "G3"), c("G2", "G3")
+    )  ) + scale_colour_manual(values=c("pink", "orange", "red"))
+    return(p1+p2)
+
+}
+
+p = plot.r2(combind_data,"RPL41")
+ggsave("figures/Fig3-e1.pdf", p,  width=8, height=5)
+p = plot.r2(combind_data,"RPL38")
+ggsave("figures/Fig3-e2.pdf", p,  width=8, height=5)
+p = plot.r2(combind_data,"RPS10")
+ggsave("figures/Fig3-e3.pdf", p,  width=8, height=5)
+
+
+# Fig4
+t_cells = c('Naive CD4 T','Memory CD4 T','Treg','Naive CD8 T','Memory CD8 T','Cytotoxic T','gdT','MAIT','Proliferative T','NKT','NK')
+t = subset(pbmc, idents = t_cells)
+t = RunUMAP(t, reduction = "harmony", dims = 1:30)
+t@meta.data$cell.type = factor(t@meta.data$cell.type, levels=t_cells)
+
+find_marker <- function(object, ident.1, ident.2, group.by) {
+    marker = FindMarkers(object, ident.1 = ident.1, ident.2 = ident.2,
+                   min.pct=0.1, logfc.threshold = 0.25, group.by=group.by, test.use="MAST", base = exp(1))
+    marker$sample = ident.1
+    marker$gene = rownames(marker)
+
+    return(marker)
+}
+
+do_deg <- function(data, min.fc=0.25, min.pvalue=0.05, min.fc_text=0.5) {
+
+    up_gene <- data[data$p_val_adj<min.pvalue & data$avg_logFC>= min.fc ,]$gene
+    if (length(up_gene) == 0) {
+        ego_up = 0
+    } else{
+        ego_up = go_enrich(up_gene, "BP")
+        }
+    #p2 = dotplot(ego_up, showCategory = 20) + ggtitle(paste0(data$sample[1], "-UP"))
+
+    down_gene <- data[data$p_val_adj<min.pvalue & data$avg_logFC <= -min.fc ,]$gene
+    if (length(down_gene) == 0) {
+        ego_down = 0
+    } else{
+    ego_down = go_enrich(down_gene, "BP")
+        }
+    #p3 = dotplot(ego_down, showCategory = 20)+ ggtitle(paste0(data$sample[1], "-DOWN"))
+
+    return(list(up_gene=up_gene,down_gene=down_gene, ego_up=ego_up, ego_down=ego_down))
+}
+
+make_combined_go <- function(object, min.fc=0.25, min.pvalue=0.05) {
+
+    DefaultAssay(object) <- "RNA"
+    markers = find_marker( object, ident.1="LD", ident.2="HD", group.by="group")
+    deg_long = do_deg(markers,min.fc=min.fc,min.pvalue=min.pvalue)
+    names(deg_long) = c("L-H-upgene","L-H-downgene","L-H-updeg","L-H-downdeg")
+
+    markers = find_marker( object, ident.1="SD", ident.2="HD", group.by="group")
+    deg_short = do_deg(markers,min.fc=min.fc,min.pvalue=min.pvalue)
+    names(deg_short) = c("S-H-upgene","S-H-downgene","S-H-updeg","S-H-downdeg")
+
+    markers = find_marker( object, ident.1="LD", ident.2="SD", group.by="group")
+    deg_ls = do_deg(markers,min.fc=min.fc,min.pvalue=min.pvalue)
+
+    names(deg_ls) = c("L-S-upgene","L-S-downgene","L-S-updeg","L-S-downdeg")
+
+    deg = c(deg_long[["L-H-updeg"]], deg_long[["L-H-downdeg"]],
+            deg_short[["S-H-updeg"]], deg_short[["S-H-downdeg"]],
+           deg_ls[["L-S-updeg"]],deg_ls[["L-S-downdeg"]]
+           )
+
+    names(deg) = c("L-H-updeg","L-H-downdeg","S-H-updeg","S-H-downdeg","L-S-updeg","L-S-downdeg" )
+
+    pathways = lapply(
+        names(deg), function(x) {
+
+            pathway = deg[[x]]@result
+            pathway["group"] = x
+            return (pathway)
+        }
+    )
+
+    genes = c(deg_long[["L-H-upgene"]], deg_long[["L-H-downgene"]], deg_short[["S-H-upgene"]],
+                    deg_short[["S-H-downgene"]], deg_ls[["L-S-upgene"]], deg_ls[["L-S-downgene"]])
+    pathways = do.call(rbind, pathways)
+    sig_pathway = pathways[pathways$p.adjust < 0.05,]
+
+    return(list(pathway=sig_pathway, gene=genes))
+
+}
+
+plot_combined_go_v <- function(go_df, topn=10, order=c("long-health-updeg","short-health-updeg","long-health-downdeg","short-health-downdeg",
+                         "long-short-updeg", "long-short-downdeg"), maxp = 6) {
+
+    show_pathway = data.frame()
+    for (o in order[order %in% unique(go_df$group)]) {
+        df = go_df[go_df$group == o,]
+        p = tail(head(df$p.adjust, topn),1)
+        show_pathway = rbind(show_pathway,df[df$p.adjust <= p,] )
+    }
+    go_df = go_df[go_df$ID %in% show_pathway$ID,]
+    s = as.data.frame(do.call(rbind, strsplit(go_df$GeneRatio, "/")), stringsAsFactors = FALSE)
+    s$V1 = as.numeric(s$V1)
+    s$V2 = as.numeric(s$V2)
+    go_df$GeneRatio = s$V1/s$V2
+    go_df$group = factor(go_df$group, levels=order)
+    go_df$Description = factor(go_df$Description, levels= unique(show_pathway$Description))
+    p = ggplot(data=go_df) +
+    geom_point(aes(x=Description, y=group, size=GeneRatio, color= -log10(p.adjust))) +
+    scale_color_continuous(limits = c(0,maxp), breaks=c(0,maxp),na.value = "red",low = "white", high = "red") +
+    theme_bw()+ theme(
+    line =element_line(colour = "black", size = 1),
+    text=element_text(color='black', size=8),
+    axis.text.x = element_text(size=8, angle = 45, hjust=1),
+    title=element_text(color='black', size=10),
+    panel.border = element_rect(colour ='black', size=1 ),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+    return(p)
+}
+
+# Fig4-a
+p = DimPlot(t, group.by = "cell.type", label=T, cols = cluster_colors[1:11])+ NoLegend() + NoAxes()+ ggtitle("")
+ggsave("figures/Fig4-a.pdf", width = 5, height = 5, p)
+
+# Fig4-b
+t_genes = c("CD3D", "CD3E", "CD4", "FOXP3", "CCR7", "CD8A", "GZMH", "GZMK", "TRGV9", "SLC4A10","MKI67", "KLRF1")
+p1 = FeaturePlot(t, t_genes[1]) + NoAxes()+ ggtitle("")
+p2 = FeaturePlot(t, t_genes[2]) + NoAxes()+ ggtitle("")
+p3 = FeaturePlot(t, t_genes[3]) + NoAxes()+ ggtitle("")
+p4 = FeaturePlot(t, t_genes[4]) + NoAxes()+ ggtitle("")
+p5 = FeaturePlot(t, t_genes[5]) + NoAxes()+ ggtitle("")
+p6 = FeaturePlot(t, t_genes[6]) + NoAxes()+ ggtitle("")
+p7 = FeaturePlot(t, t_genes[7]) + NoAxes()+ ggtitle("")
+p8 = FeaturePlot(t, t_genes[8]) + NoAxes()+ ggtitle("")
+p9 = FeaturePlot(t, t_genes[9]) + NoAxes()+ ggtitle("")
+p10 = FeaturePlot(t, t_genes[10]) + NoAxes()+ ggtitle("")
+p11 = FeaturePlot(t, t_genes[11]) + NoAxes()+ ggtitle("")
+p12 = FeaturePlot(t, t_genes[12]) + NoAxes()+ ggtitle("")
+p = p1 + p2 + p3 + p4 + p5 + p6+ p7 + p8 + p9+ p10 + p11 + p12 + plot_layout(ncol=3)
+ggsave("figures/Fig4-b.jpg", width = 8, height = 10, p, dpi=600)
+
+# Fig4-c
+Idents(t) <- "cell.type"
+norm_exp = norm_expression(t)
+to_health = lapply(t_cells, function(x) {
+    l = (norm_exp[paste0(x,"_L")]+1)/(norm_exp[paste0(x,"_H")] + 1)
+    s = (norm_exp[paste0(x,"_S")]+1)/(norm_exp[paste0(x,"_H")] + 1)
+    return(cbind(log2(l), log2(s)))
+    }
+  )
+to_h_mtx = do.call(cbind, to_health)
+p = plot_corr_map(to_h_mtx, t_cells,  nfeature =  3000)
+pdf("figures/Fig4-c.pdf", width=8, height = 6.8)
+print(p)
+dev.off()
+
+# Fig4-d
+go_df = make_combined_go(subset(t, subset=cell.type=="Memory CD8 T"))
+pdf("figures/Fig4-d.pdf", width=14, height=7)
+p = plot_combined_go_v(
+    go_df$pathway, topn = 10,
+    order=c("L-H-updeg","S-H-updeg","L-H-downdeg","S-H-downdeg","L-S-updeg", "L-S-downdeg"),
+    maxp=8
+    )
+print(p)
+dev.off()
+
+# Fig4e
+genes = c(
+    "RPS26","JUN","DNAJB1","HIST1H4C","AHNAK","SYNE2","ERAP2","PPP1R15A","PRMT2","KIAA1551",
+    "BTG2","FOSB","CORO1B","DIP2A","FOS","EIF4G2","CXCR4","CD6","KMT2E-AS1","NFKBIZ","JUNB",
+    "PCBP1","MT-ATP8","RPL41","TMA7","RPS27","RPS29","RPS21","SUN2","KLF2","CMPK1","ARPC2",
+    "SSU72","IFITM2","RAC1","RPL36A","CYBA","SRM","RPS10","GRK6","ATP5ME","YPEL3","SRSF9",
+    "FMNL1","MZT2B","SSBP4","TAF10","KLRK1","LAMP1","PRF1","TBX21","PTP4A2","XBP1","HLA-DQA1",
+    "KLRD1","H1FX","FCGR3A","EFHD2","NKG7","DUSP2","HLA-B","PIK3R1","ZFP36L2","IRF1","DYNLT1",
+    "ZFP36","CD74","BTG1","MAP3K8","SRGN","HERPUD1","TNFAIP3","H3F3B","TENT5C","SELENOK","PDE4B",
+    "CREM","CD5","P2RY8","DDIT4","LITAF","CCL3L1","CEMIP2","ARID5A","MTFP1","IGLV2-14","VAMP2",
+    "CCL5","ENC1","RGS1","CLEC2B","FYN","HLA-DRB1","HNRNPLL","SLC2A3","SKIL","RUNX3","NR4A2",
+    "CDKN1B","HMGB2","PDE4D","COTL1","DNAJB6","ARL4C","MT2A","HLA-DRA","SYTL3","RNF125","SRRT",
+    "GBP5","RNF19A","DUSP1","KLF6","PIM1","GIMAP1","NSG1","GIMAP6","GIMAP7","DENND2D","TUBA1A",
+    "PTGER2","SCML4","LEF1","NCR3","IL7R","LINC00861","FLI1","LDLRAP1","CITED2","MALAT1","LTB",
+    "TMEM123","SRSF5","DDX17","FLT3LG","SELPLG","LBH","NOSIP","VIM","AC119396.1","CCNL1","PPP1R10",
+    "SERINC5","SLFN5","ARHGAP15","TCF7","LDHB","IFNG-AS1","SELL","NELL2","NFKBIA","ITGB1",
+    "CST7","SUB1","CCL4","PET100","C12orf75","CTSW","CMC1","ODC1","GZMA","PPP2R5C","ARF6","SAMSN1",
+    "HNRNPL","UQCRFS1","SRSF2","RBM38","CEBPB","VPS37B","GPR65","ZEB2","S1PR5","TRGV10"
+)
+show_genes = c(
+    "RAC1", "KLRK1", "CCL4", "CCL5", "HLA-DRB1", "CD74", "FYN", "IRF1", "HMGB2", "SELENOK",
+    "RNF125", "GBP5"
+)
+ns = do.call(c, lapply( show_genes, function(x) {return (which(genes == x)) }))
+labels = genes[ns]
+gene_df = plot_heatmap(subset(pbmc, idents = "Memory CD8 T"),genes, group.by="sample")
+ha = rowAnnotation(foo = anno_mark(at = ns, labels = labels))
+pdf("figures/Fig4-e.pdf", width=5, height=8)
+p = Heatmap(gene_df, clustering_distance_rows = "pearson",use_raster = FALSE, cluster_columns = FALSE, cluster_rows = TRUE,show_row_names = FALSE, right_annotation = ha,  row_names_side = "left", row_names_gp = gpar(fontsize = 4))
+print(p)
+dev.off()
+
+# Fig4f
+go_df = make_combined_go(subset(t, subset=cell.type=="NK"))
+pdf("figures/Fig4-f.pdf", width=14, height=7)
+p = plot_combined_go_v(
+    go_df$pathway, topn = 10,
+    order=c("L-H-updeg","S-H-updeg","L-H-downdeg","S-H-downdeg","L-S-updeg", "L-S-downdeg"),
+    maxp=8
+    )
+print(p)
+dev.off()
+
+# Fig4g
+genes = c(
+    "HLA-B","RPS26","UBC","PRMT2","CD52","DIP2A","HLA-E","ERAP2","FLNA","TCF25","SYNE2",
+    "HSP90AA1","GADD45B","DDIT4","MBP","HIST1H4C","ADGRG1","TMEM107","AHNAK","RNF213","SEPT7",
+    "UCP2","MYH9","DUSP2","EIF4G2","LAIR1","ANXA6","HLA-DRB5","MYOM2","ARGLU1","ITGB7","GZMH",
+    "RUNX3","JUNB","MYO1G","TECR","CCL5","IL32","SYNE1","TRBC1","KIR3DL1","CCL4L2","MT-ATP8",
+    "PCBP1","RPL39","RPL41","RPS27","RPS29","TMA7","GNLY","RPS21","RPS28","MT-ND3","CEBPD",
+    "RPL37A","RPL36A","RPL38","RPS2","LYN","RPS10","KLF2","RAC1","SUN2","GRK6","TAGAP","SSU72",
+    "KLF6","ATP5ME","SRM","BIN1","EIF3G","MAP2K2","ARPC2","MT-ND4","YPEL3","FOS","MZT2B","GPR65",
+    "CMPK1","KLRK1","TSC22D3","XCL1","TAF10","COTL1","CD3E","GZMK","IRF1","MAP3K8","CXCR4",
+    "ZFP36","DYNLT1","RPL7","S100A6","H3F3B","ZFP36L2","RGS2","CEBPB","PIK3R1","PDE4D","P2RY8",
+    "VAMP2","ARL4C","CEMIP2","SERTAD3","TNFAIP3","METRNL","CREM","DDX6","MAFF","DNAJB6",
+    "IFNGR1","ENC1","FOSL2","F2R","AREG","NR4A2","TENT5C","KLF3","VPS37B","IFI27L2","AC012615.1",
+    "SLA2","RCC1","ZNF331","BTG2","CDKN1B","SPOCK2","PTGDS","DUSP1","PPP1R15A","DENND2D","GIMAP1",
+    "XCL2","C1orf162","TUBA1A","HSPA8","TRAF3IP3","GIMAP6","DYNLL1","GIMAP7","CCND3","CX3CR1","PIM1",
+    "MAPRE2","ACTG1","LINC00861","CD160","FLI1","SAMD3","CXXC5","CD48","FCMR","CITED2","TUBB","SLFN5",
+    "S100A9","MALAT1","CORO1A","AC007952.4","KMT2E-AS1","PTPRCAP","RAC2","PLEK","TXNIP","BTN3A2","ACTR3",
+    "ADGRE5","LY6E","AC245014.3","PTPN6","CD53","ARHGAP30","TAP1","TUBA1B","ADD3","SPON2","DDX17","FGR",
+    "MTSS1","NCR3","SASH3","PTGDR","RPL37","RPL34","BTG1","PET100","SSBP4","RPS20","SELENOK","FMNL1",
+    "HNRNPL","LINC01871","AUTS2","SYTL3","MT-ND6","ERN1","BHLHE40"
+)
+show_genes = c(
+    "ZFP36L2", "CXCR4", "IRF1", "JUNB", "RAC1", "LYN", "KLF2", "RPL37", "RPL38", "RPS20",
+    "RPS27", "RPL34", "RPL39", "RPS28", "RPL41", "RPS21", "RPS29", "RPL37A", "RPL36A", "RPS10"
+)
+ns = do.call(c, lapply( show_genes, function(x) {return (which(genes == x)) }))
+labels = genes[ns]
+gene_df = plot_heatmap(subset(pbmc, idents = "NK"),genes, group.by="sample")
+ha = rowAnnotation(foo = anno_mark(at = ns, labels = labels))
+pdf("figures/Fig4-g.pdf", width=5, height=8)
+p = Heatmap(gene_df, clustering_distance_rows = "pearson",use_raster = FALSE, cluster_columns = FALSE, cluster_rows = TRUE,show_row_names = FALSE, right_annotation = ha,  row_names_side = "left", row_names_gp = gpar(fontsize = 4))
+print(p)
+dev.off()
+
+
+# FigS3
+## FigS3-a
+p = DimPlot(pbmc,group.by="cell.type", cols=c(cluster_colors, "grey"),split.by="group") + NoAxes()
+ggsave("figures/FigS3-a.pdf", p, width=13.5, height=4)
+
+## FigS3-b
+require("RColorBrewer")
+s1 = FeaturePlot(pbmc, features=c("nCount_RNA"), label=FALSE)+scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral")))
+s2 = FeaturePlot(pbmc, features=c("nFeature_RNA"), label=FALSE)+scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral")))
+s3 = FeaturePlot(pbmc, features=c("percent.mt"), label=FALSE)+scale_colour_gradientn(colours = rev(brewer.pal(n = 11, name = "Spectral")))
+p = s1 + s2 + s3 + plot_layout(ncol =3)
+ggsave("figures/FigS3-b.pdf", p, width=13.5, height=4)
+
+## FigS3-c
+markers = c("CD3D", "CD3E", "CD4","CCR7",  "TCF7", "CCR6", "FOXP3", "CD8A", "GZMK", "GZMH", "TRGV9","SLC4A10", "MKI67",
+            "KLRF1", "CD79A", "IGHD", "CD27", "MZB1", "LYZ", "CD14", "FCGR3A", "CD1C", "CLEC4C", "PPBP", "CD34")
+p = DotPlot(pbmc, group.by="cell.type", features = markers)
+ggsave("figures/FigS3-c.pdf", p, width=13.5, height=9)
+
+# FigS4
+plot_corr_map <- function(corr_matrix, cell.types, cols=list(Cell.type = cluster_colors,Group= group_colors[c("L", "S")]), nfeature=2000) {
+    require(circlize)
+    require(ComplexHeatmap)
+    corr_matrix = corr_matrix[do.call(rbind, strsplit(names(corr_matrix), "_"))[,1] %in% cell.types]
+
+    var_gene = select_vairable_gene(corr_matrix, nfeature)
+    var_exp = corr_matrix[var_gene,]
+    corr_matrix = cor(var_exp, var_exp,method = "pearson")
+    corr_anno = do.call(rbind, strsplit(colnames(corr_matrix), "_"))
+    col_fun = colorRamp2(c(1, 0, -1), c("red", "white", "blue"))
+    anno = HeatmapAnnotation(df = data.frame(Cell.type = corr_anno[,1],  Group = corr_anno[,2]), col = cols)
+    ranno = rowAnnotation(df = data.frame(Cell.type = corr_anno[,1],  Group = corr_anno[,2]), col = cols)
+
+    p = Heatmap(corr_matrix, top_annotation = anno, left_annotation = ranno, show_row_names=FALSE, show_column_names = FALSE, heatmap_legend_param = list(
+            title = "PCC", at = c(1, 0, -1),
+            labels = c("1", "0", "-1")
+        ), col=col_fun)
+    return(p)
+}
+
+Idents(pbmc) <- "cell.type"
+norm_exp = norm_expression(subset(pbmc, subset=cell.type != "HSC"))
+to_health = lapply(c('Naive CD4 T','Memory CD4 T','Treg','Naive CD8 T','Memory CD8 T','Cytotoxic T','gdT','MAIT',
+                     'Proliferative T','NKT','NK','Naive B','Memory B','Plasma B','CD14 Mono','CD16 Mono','mDC',
+                     'pDC','Megakaryocyte'), function(x) {
+
+
+    l = (norm_exp[paste0(x,"_L")]+1)/(norm_exp[paste0(x,"_H")] + 1)
+    s = (norm_exp[paste0(x,"_S")]+1)/(norm_exp[paste0(x,"_H")] + 1)
+
+    return(cbind(log2(l), log2(s)))
+
+    }
+  )
+to_h_mtx = do.call(cbind, to_health)
+p = plot_corr_map(to_h_mtx, c('Naive CD4 T','Memory CD4 T','Treg','Naive CD8 T','Memory CD8 T','Cytotoxic T','gdT','MAIT',
+                     'Proliferative T','NKT','NK','Naive B','Memory B','Plasma B','CD14 Mono','CD16 Mono','mDC',
+                     'pDC','Megakaryocyte'), nfeature =  3000)
+
+pdf("figures/FigS4.pdf", width=8, height = 6.8)
+print(p)
+dev.off()
+
+
+# FigS5
+t = readRDS("data/singlecell_GSE158055.RDS")
+cell_levels = c("Naive CD4 T", "Memory CD4 T", "Treg", "Naive CD8 T", "Memory CD8 T", "Cytotoxic T", "gdT","Proliferative T", "NKT")
+# FigS5-a
+p = DimPlot(t, group.by="cell.type", label=TRUE, cols=cluster_cols, pt.size = 0.001) + NoLegend() + NoAxes() + ggtitle("")
+ggsave("figures/FigS5-a.pdf", p, width=5, height=5)
+
+# FigS5-b
+markers = c(
+    "CD3D", "CD3E", "CD4","CCR7", "TCF7",
+    "CCR6", "FOXP3", "CD8A", "GZMK", "GZMH",
+    "TRGV9","SLC4A10", "MKI67", "KLRF1"
+    )
+p = DotPlot(t, group.by="cell.type", features = markers)+theme(axis.text.x = element_text(angle=90, hjust=1))
+ggsave("figures/FigS5-b.pdf", p, width=7.5, height=5)
+
+# FigS5-c
+p = DimPlot(t, split.by = "group", group.by = "cell.type",cols=cluster_cols)+ NoAxes()
+ggsave("figures/FigS5-c.pdf", p, width=13.5, height=4)
+
+# FigS5-d
+down_genes = read.csv("data/singlecell_GSE158055.down_gene.csv")
+pathways = data.frame()
+for (cell_type in cell_levels) {
+    down_gene = down_genes$gene[down_genes$cell == cell_type]
+    ego_down = go_enrich(down_gene, "BP")
+    pathway = ego_down[ego_down$p.adjust < 0.05,]
+    pathway["cell"] = cell_type
+    pathway = pathway[c("ID", "Description", "p.adjust","GeneRatio","cell")]
+    pathways = rbind(pathways, pathway)
+}
+pathways$p.adjust = as.numeric(as.character(pathways$p.adjust))
+wanted_pathway = pathways %>% group_by(cell) %>% top_n(n=10, wt=-p.adjust)
+pid = unique(wanted_pathway$ID)
+s = as.data.frame(do.call(rbind, strsplit(pathways$GeneRatio, "/")), stringsAsFactors = FALSE)
+s$V1 = as.numeric(s$V1)
+s$V2 = as.numeric(s$V2)
+pathways$GeneRatio = s$V1/s$V2
+long.down = pathways[pathways$ID %in% pid,]
+long.down$Description = factor(long.down$Description, levels= rev(unique(long.down$Description)))
+long.down$cell = factor(long.down$cell, levels= analysis_culsters)
+p = ggplot(data=long.down) +
+      geom_point(aes(x=cell, y=Description, size=GeneRatio, color=-log10(p.adjust))) + scale_color_continuous(limits=c(0,10), breaks=c(0, 10),na.value="blue", low="white", high="blue")+ theme_bw()+ theme(
+    line =element_line(colour = "black", size = 1),
+    text=element_text(color='black', size=8),
+    axis.text.x = element_text(size=8, angle = -45, hjust=0),
+    title=element_text(color='black', size=10),
+    panel.border = element_rect(colour ='black', size=1 ),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+ggsave("figures/FigS5-d.pdf", width = 8, height = 8, p)
+
+
+# FigS6
+plot_module_score <- function(object, genes, name="module", group.by="cell.type") {
+    require(rstatix)
+    require(dplyr)
+    require(ggpubr)
+    object = AddModuleScore(object, list(genes), name = "module")
+
+    module = paste0("module", 1)
+    p = FeaturePlot(object, features=module)
+
+    df = object@meta.data[c(group.by, "group", module)]
+    df$group = factor(df$group, levels=c("HD", "SD", "LD"))
+
+    #p1 = ggboxplot(df, x=group.by,y=module, add = "jitter",color = "group")
+    p1 <- ggboxplot(df, x = group.by, y =module,
+          color = "group", outlier.shape=NA,bxp.errorbar=T)
+
+    stat.test <- df %>%
+      group_by(cell.type) %>%
+      wilcox_test(module1 ~ group, p.adjust.method= "BH")
+    stat.test <- stat.test %>% add_xy_position(x =group.by)
+
+    p = p1 + stat_pvalue_manual(stat.test, label = "p.adj") + ggtitle(name) + theme(
+        axis.text.x = element_text(size=10, angle = 45, hjust=1))
+    return(p)
+}
+
+## FigS6-a
+treg_func_genes = c("CTLA4", "PDCD1", "TIGIT", "LAG3", "FOXP3", "CCR7", "LGALS3", "TRAF1", "IL2RA")
+treg = subset(pbmc, subset=cell.type=="Treg")
+treg@meta.data$cell.type = factor(treg@meta.data$cell.type, levels=c("Treg"))
+p = plot_module_score(treg, treg_func_genes, "treg")
+ggsave("figures/FigS6-a.pdf",p, width=5, height=4.5)
+
+## FigS6-b
+exhaustion_genes = c('CTLA4', 'PDCD1', 'TIGIT', 'LAG3', 'HAVCR2', "TOX")
+cytotoxic_t = subset(pbmc, subset=cell.type=="Cytotoxic T")
+cytotoxic_t@meta.data$cell.type = factor(cytotoxic_t@meta.data$cell.type, levels=c("Cytotoxic T"))
+p = plot_module_score(cytotoxic_t, exhaustion_genes, "exhaustion")
+ggsave("figures/FigS6-b.pdf", p, width=5, height=4.5)
+
+# FigS7
+b_cells = c('Naive B','Memory B','Plasma B')
+b = subset(pbmc, idents = b_cells)
+b = RunUMAP(b, reduction = "harmony", dims = 1:30)
+b@meta.data$cell.type = factor(b@meta.data$cell.type, levels=b_cells)
+
+plot_combined_go_h <- function(go_df, topn=10, order=null, maxp = 6) {
+
+    show_pathway = data.frame()
+    for (o in order[order %in% unique(go_df$group)]) {
+
+        df = go_df[go_df$group == o,]
+        p = tail(head(df$p.adjust, topn),1)
+        show_pathway = rbind(show_pathway,df[df$p.adjust <= p,] )
+    }
+   # show_pathway = go_df %>% group_by(group) %>% top_n(n=topn, wt=-p.adjust)
+    go_df = go_df[go_df$ID %in% show_pathway$ID,]
+
+    s = as.data.frame(do.call(rbind, strsplit(go_df$GeneRatio, "/")), stringsAsFactors = FALSE)
+    s$V1 = as.numeric(s$V1)
+    s$V2 = as.numeric(s$V2)
+    go_df$GeneRatio = s$V1/s$V2
+
+    go_df$group = factor(go_df$group, levels=order)
+
+    go_df$Description = factor(go_df$Description, levels= unique(show_pathway$Description))
+
+    p = ggplot(data=go_df) +
+    geom_point(aes(x=group, y=Description, size=GeneRatio, color= -log10(p.adjust))) +
+    scale_color_continuous(limits = c(0,maxp), breaks=c(0,maxp),na.value = "red",low = "white", high = "red") +
+    scale_y_discrete(position = "right") +
+    theme_bw()+ theme(
+    line =element_line(colour = "black", size = 1),
+    text=element_text(color='black', size=8),
+    axis.text.x = element_text(size=8, angle = 45, hjust=1),
+    title=element_text(color='black', size=10),
+    panel.border = element_rect(colour ='black', size=1 ),
+    panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+    return(p)
+}
+
+# FigS7-a
+p = DimPlot(b, group.by = "cell.type", label=T, cols = cluster_colors[12:14])+ NoLegend() + NoAxes()+ ggtitle("")
+ggsave("figures/FigS7-a.pdf", width = 5, height = 10, p)
+
+# FigS7-b
+b_genes = c("CD79A", "IGHD", "CD27","MZB1")
+p1 = FeaturePlot(b, b_genes[1]) + NoAxes() + ggtitle("")
+p2 = FeaturePlot(b, b_genes[2]) + NoAxes() + ggtitle("")
+p3 = FeaturePlot(b, b_genes[3]) + NoAxes() + ggtitle("")
+p4 = FeaturePlot(b, b_genes[4]) + NoAxes() + ggtitle("")
+p = p1 + p2 + p3 + p4 + plot_layout(ncol=2)
+ggsave("figures/FigS7-b.pdf", width = 7, height = 7, p)
+
+# FigS7-c
+go_df = make_combined_go(subset(b, subset=cell.type=="Memory B"))
+pdf("figures/FigS7-c.pdf", width=7, height=8)
+p = plot_combined_go_h(go_df$pathway, topn = 10, order=c("L-H-updeg","S-H-updeg","L-H-downdeg","S-H-downdeg",
+                         "L-S-updeg", "L-S-downdeg"), maxp=8)
+print(p)
+dev.off()
+
+# FigS7-d
+show_genes = c(
+    "BTG2", "ZFP36L2", "BTG1", "PDE4B", "GPR183", "CD83", "JUNB", "EZR", "PELI1", "NFKBID",
+    "RAC1", "DUSP1", "LYN"
+    )
+
+genes = c(
+    "RPS26","RPS4Y1","MALAT1","ARGLU1","DDX17","HIST1H4C","EAF2","ERAP2","TPD52","AHNAK",
+    "TAPBP","EIF4G2","NBPF26","ARID5B","SMCHD1","FLNA","KDM4B","MTDH","NBPF14","BRD2",
+    "FCER2","PLPP5","CORO1B","CLEC2D","IRF1","GSTP1","IL4R","PPP1R14A","IGHG1","MT-ATP8",
+    "PCBP1","RPL41","RPS27","RPS21","RPL39","RPS29","LYN","RPL36A","TMA7","RPS10","RPS2",
+    "CMPK1","RPL38","COTL1","MT-ND3","GRK6","SRM","SUN2","SSU72","KLF2","DUSP1","IFI44L",
+    "PTOV1","RAC1","MZT2B","CXCR4","RPL7","HERPUD1","ZFP36L2","H3F3B","VAMP2","IL10RA","EZR",
+    "TSC22D3","CD83","BTG1","PELI1","EMP3","PDE4B","BTG2","PIM3","SLC2A3","NRROS","AC004687.1",
+    "PIM2","NFKBID","RHOB","TXNIP","RGS2","MAP3K8","KLK1","PPP1R15A","HLA-DRB5","CD24","KLF6",
+    "SRSF5","FOS","CD180","DYNLL1","BIN1","TLR10","XAF1","SIT1","GAPT","IRF7","IFITM1",
+    "RBM39","STX7","LBH","SCIMP","RALGPS2","TRA2A","FCMR","ITSN2","AC119396.1","SRSF11",
+    "PARP15","TRIM38","EBLN3P","CCNL1","IRF8","CYB561A3","TTN","ITGA4","ADK","MX1","COCH",
+    "BCL3","HLA-DRB1","GPR183","CHPT1","ODC1","ARF6","FMNL1","TAGAP","YPEL3","CXXC5","JUNB"
+    )
+ns = do.call(c, lapply( show_genes, function(x) {return (which( genes== x)) }))
+labels = genes[ns]
+gene_df = plot_heatmap(subset(b, idents = "Memory B"),genes, group.by="sample")
+pdf("figures/FigS7-d.pdf", width=6, height=8)
+ha = rowAnnotation(foo = anno_mark(at = ns, labels = labels))
+p = Heatmap(gene_df, clustering_distance_rows = "pearson",use_raster = FALSE, cluster_columns = FALSE, cluster_rows = TRUE,show_row_names = FALSE, right_annotation = ha,  row_names_side = "left", row_names_gp = gpar(fontsize = 4))
+print(p)
+dev.off()
