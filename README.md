@@ -1,2 +1,2 @@
 # Clinical and molecular characteristics of COVID-19 patients with persistent SARS-CoV-2 infection
-This repository contains code and data used in the paper "Clinical and molecular characteristics of COVID-19 patients with persistent SARS-CoV-2 infection"
+This repository contains code and data used in the paper "Clinical and molecular characteristics of COVID-19 patients with persistent SARS-CoV-2 infection" published on *Nature Communications* (10.1038/s41467-021-23621-y)
